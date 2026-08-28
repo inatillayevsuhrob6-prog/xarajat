@@ -23,9 +23,11 @@ app = Flask(__name__, static_folder='.', static_url_path='')
 # ---------------------------------------------------------
 # XAVFSIZLIK: Telegram initData ni tekshirish
 # ---------------------------------------------------------
+# bot.py dagi validate_telegram_data funksiyasini shunga almashtiring:
 def validate_telegram_data(init_data: str, bot_token: str) -> dict | None:
     """Telegramdan kelgan ma'lumotni haqiqiyligini tekshiradi"""
     if not init_data or len(init_data) < 10:
+        print(f"⚠️ initData bo'sh yoki juda qisqa: {init_data[:20] if init_data else 'None'}")
         return None
         
     try:
@@ -37,10 +39,14 @@ def validate_telegram_data(init_data: str, bot_token: str) -> dict | None:
         calculated_hash = hmac.new(secret_key, data_check_string.encode(), hashlib.sha256).hexdigest()
         
         if hmac.compare_digest(calculated_hash, received_hash):
-            return {'user_id': int(parsed_data['user']['id'])}
+            user_id = int(parsed_data['user']['id'])
+            print(f"✅ User validated: {user_id}")
+            return {'user_id': user_id}
+        else:
+            print(f"❌ Hash mismatch! Calculated: {calculated_hash[:10]}, Received: {received_hash[:10]}")
             
     except Exception as e:
-        print(f"Validation Error: {e}")
+        print(f"❌ Validation Error: {e}")
     
     return None
 
@@ -338,57 +344,59 @@ HTML_CONTENT = """
             } catch(e) { showToast(" Xatolik!"); }
         }
 
-        async function loadView(view) {
-            currentView = view;
-            document.getElementById('btn-oy').classList.toggle('active', view==='oy');
-            document.getElementById('btn-hafta').classList.toggle('active', view==='hafta');
-            
-            const resDiv = document.getElementById('res');
-            resDiv.innerHTML = "<div style='opacity:0.5'>Yuklanmoqda...</div>";
+        // script.js qismidagi loadView funksiyasini shunga almashtiring:
+async function loadView(view) {
+    currentView = view;
+    document.getElementById('btn-oy').classList.toggle('active', view==='oy');
+    document.getElementById('btn-hafta').classList.toggle('active', view==='hafta');
+    
+    const resDiv = document.getElementById('res');
+    resDiv.innerHTML = "<div style='opacity:0.5'>Yuklanmoqda...</div>";
 
-            try {
-                const r = await fetch(`/api/stats?period=${view}&initData=${encodeURIComponent(initData)}`);
-                const d = await r.json();
-                
-                // Agar xavfsizlik xatosi bo'lsa (403), foydalanuvchiga tushunarli xabar
-                if(d.error) {
-                    resDiv.innerHTML = `<div style='color:#aaa; text-align:center;'>${d.error}<br><small>(Faqat Telegram ichida ishlaydi)</small></div>`;
-                    return;
-                }
+    // initData mavjudligini tekshirish
+    if (!initData || initData.length < 10) {
+        resDiv.innerHTML = `<div style='color:#ff2a6d; text-align:center;'>⚠️ Telegram ma'lumotlari topilmadi.<br>Iltimos, ilovani qaytadan oching.</div>`;
+        return;
+    }
 
-                let html = `<span class="total-line">Jami: ${d.total.toLocaleString()} so'm</span>`;
-                
-                if(d.categories && d.categories.length > 0) {
-                    d.categories.forEach(c => {
-                        const sum = c[2] || 0;
-                        const name = c[1] || "Noma'lum";
-                        const cnt = c[3] || 0;
-                        const id = c[0] || 0;
-
-                        html += `<div class="list-item">
-                            <div class="item-info">
-                                <div class="item-sum">${sum.toLocaleString()} so'm</div>
-                                <div class="item-cat">${name} (${cnt} ta)</div>
-                            </div>
-                            <div class="item-actions">
-                                <button class="act-btn edit" onclick="editItem(${id}, ${sum}, '${name}')" title="Tahrirlash">
-                                    <svg viewBox="0 0 24 24"><path d="M3 17.25V21h3.75L17.81 9.94l-3.75-3.75L3 17.25zM20.71 7.04c.39-.39.39-1.02 0-1.41l-2.34-2.34c-.39-.39-1.02-.39-1.41 0l-1.83 1.83 3.75 3.75 1.83-1.83z"/></svg>
-                                </button>
-                                <button class="act-btn del" onclick="deleteItem(${id})" title="O'chirish">
-                                    <svg viewBox="0 0 24 24"><path d="M6 19c0 1.1.9 2 2 2h8c1.1 0 2-.9 2-2V7H6v12zM19 4h-3.5l-1-1h-5l-1 1H5v2h14V4z"/></svg>
-                                </button>
-                            </div>
-                        </div>`;
-                    });
-                } else {
-                    html += "<div style='opacity:0.7; text-align:center; padding:10px;'>Bu davrda xarajatlar yo'q.</div>";
-                }
-                resDiv.innerHTML = html;
-            } catch(e) {
-                console.error(e);
-                resDiv.innerHTML = "<div style='color:var(--danger)'>Ma'lumot yuklashda xatolik!</div>";
-            }
+    try {
+        const r = await fetch(`/api/stats?period=${view}&initData=${encodeURIComponent(initData)}`);
+        const d = await r.json();
+        
+        if(d.error) {
+            resDiv.innerHTML = `<div style='color:#aaa; text-align:center;'>${d.error}</div>`;
+            return;
         }
+
+        let html = `<span class="total-line">Jami: ${d.total.toLocaleString()} so'm</span>`;
+        
+        if(d.categories && d.categories.length > 0) {
+            d.categories.forEach(c => {
+                const sum = c[2] || 0;
+                const name = c[1] || "Noma'lum";
+                const cnt = c[3] || 0;
+                const id = c[0] || 0;
+
+                html += `<div class="list-item">
+                    <div class="item-info">
+                        <div class="item-sum">${sum.toLocaleString()} so'm</div>
+                        <div class="item-cat">${name} (${cnt} ta)</div>
+                    </div>
+                    <div class="item-actions">
+                        <button class="act-btn edit" onclick="editItem(${id}, ${sum}, '${name}')">️</button>
+                        <button class="act-btn del" onclick="deleteItem(${id})">️</button>
+                    </div>
+                </div>`;
+            });
+        } else {
+            html += "<div style='opacity:0.7; text-align:center; padding:10px;'>Bu davrda xarajatlar yo'q.</div>";
+        }
+        resDiv.innerHTML = html;
+    } catch(e) {
+        console.error(e);
+        resDiv.innerHTML = "<div style='color:var(--danger)'>Tarmoq xatosi!</div>";
+    }
+}
         
         loadView('oy');
     </script>
