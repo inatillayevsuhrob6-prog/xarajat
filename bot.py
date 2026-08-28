@@ -3,7 +3,7 @@ import sqlite3
 from datetime import datetime, timedelta
 from threading import Thread
 from flask import Flask, request, jsonify
-from telegram import Update, WebAppInfo, KeyboardButton, ReplyKeyboardMarkup
+from telegram import Update, KeyboardButton, ReplyKeyboardMarkup
 from telegram.ext import Application, CommandHandler, MessageHandler, filters, ContextTypes
 
 # ---------------------------------------------------------
@@ -90,6 +90,7 @@ def get_statistics_from_db(user_id, period="oy"):
     now = datetime.now()
     start_date = (now - timedelta(days=7)).strftime("%Y-%m-%d") if period == "hafta" else now.replace(day=1).strftime("%Y-%m-%d")
     
+    # MUHIM: MIN(id) orqali har bir kategoriya uchun bitta ID olamiz
     cursor.execute(
         "SELECT MIN(id), kategoriya, SUM(summa), COUNT(*) FROM xarajatlar WHERE user_id=? AND sana>=? GROUP BY kategoriya ORDER BY SUM(summa) DESC",
         (user_id, start_date)
@@ -114,7 +115,7 @@ def get_recent_expenses(user_id, limit=20):
     return rows
 
 # ---------------------------------------------------------
-# 3. FUTURISTIK DIZAYN (Sarlavha "Cyber Xarajat" ga o'zgardi)
+# 3. FUTURISTIK DIZAYN (Ikonkalar bilan)
 # ---------------------------------------------------------
 HTML_CONTENT = """
 <!DOCTYPE html>
@@ -154,11 +155,13 @@ HTML_CONTENT = """
         .s-btn { flex: 1; background: transparent; border: 1px solid var(--glass); color: white; padding: 8px; border-radius: 6px; cursor: pointer; }
         .s-btn.active { background: var(--primary); color: black; border-color: var(--primary); }
         
+        /* Ro'yxat elementlari */
         .list-item { display: flex; justify-content: space-between; align-items: center; padding: 12px 0; border-bottom: 1px solid var(--glass); }
         .item-info { flex: 1; }
         .item-cat { font-size: 12px; opacity: 0.7; }
         .item-sum { font-weight: bold; color: var(--primary); }
         
+        /* Ikonkali tugmalar stili */
         .item-actions { display: flex; gap: 8px; margin-left: 10px; }
         .act-btn { 
             background: rgba(255, 255, 255, 0.05); 
@@ -172,9 +175,11 @@ HTML_CONTENT = """
         }
         .act-btn svg { width: 18px; height: 18px; fill: currentColor; }
 
+        /* Tahrirlash (Moviy Neon) */
         .act-btn.edit { color: #00f3ff; border-color: rgba(0, 243, 255, 0.3); }
         .act-btn.edit:hover { background: rgba(0, 243, 255, 0.15); color: #fff; box-shadow: 0 0 15px rgba(0, 243, 255, 0.6); transform: translateY(-2px); }
 
+        /* O'chirish (Qizil Neon) */
         .act-btn.del { color: #ff2a6d; border-color: rgba(255, 42, 109, 0.3); }
         .act-btn.del:hover { background: rgba(255, 42, 109, 0.15); color: #fff; box-shadow: 0 0 15px rgba(255, 42, 109, 0.6); transform: translateY(-2px); }
         
@@ -185,7 +190,6 @@ HTML_CONTENT = """
 </head>
 <body>
     <div class="container">
-        <!-- SARLAVHA O'ZGARTIRILDI -->
         <h1>Xarajat Hisoblagich</h1>
         
         <div class="card">
@@ -326,6 +330,7 @@ HTML_CONTENT = """
                         const cnt = c[3] || 0;
                         const id = c[0] || 0;
 
+                        // YANGI IKONKALI HTML
                         html += `<div class="list-item">
                             <div class="item-info">
                                 <div class="item-sum">${sum.toLocaleString()} so'm</div>
@@ -401,11 +406,10 @@ def api_stats():
 # 5. TELEGRAM BOT LOGIKASI
 # ---------------------------------------------------------
 keyboard = ReplyKeyboardMarkup([
-    [KeyboardButton("🚀 Ilovani ochish", web_app=WebAppInfo(url=WEB_URL))],
-    ["📊 Statistika", "📜 Ro'yxat"]
+    [" Statistika", "📜 Ro'yxat"],
+    [" Yordam"]
 ], resize_keyboard=True)
 
-# START FUNKSIYASI QAYTA TIKLANDI (Xatolik shu yerda edi)
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     msg = (
         " *Assalomu alaykum!*\\n\\n"
@@ -419,7 +423,7 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
 async def handle_expense(update: Update, context: ContextTypes.DEFAULT_TYPE):
     text = update.message.text.strip()
-    if text in ["📊 Statistika", "📜 Ro'yxat"]: return
+    if text in [" Statistika", "📜 Ro'yxat", " Yordam"]: return
 
     try:
         parts = text.split()
@@ -466,6 +470,14 @@ async def show_list(update: Update, context: ContextTypes.DEFAULT_TYPE):
 def main():
     init_db()
     
+    def run_flask():
+        app.run(host='0.0.0.0', port=PORT, use_reloader=False)
+    
+    t = Thread(target=run_flask)
+    t.daemon = True
+    t.start()
+    print(f" Web server: http://localhost:{PORT}")
+
     application = Application.builder().token(BOT_TOKEN).build()
     
     application.add_handler(CommandHandler("start", start))
@@ -473,20 +485,8 @@ def main():
     application.add_handler(CommandHandler("royxat", show_list))
     application.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, handle_expense))
     
-    print("🤖 Bot handlerlari ro'yxatga olindi...")
-
-    # Gunicorn uchun fon rejimidagi bot
-    def run_bot_in_background():
-        try:
-            print("🚀 Background bot polling started...")
-            application.run_polling(drop_pending_updates=True)
-        except Exception as e:
-            print(f"❌ Bot error: {e}")
-
-    bot_thread = Thread(target=run_bot_in_background)
-    bot_thread.daemon = True
-    bot_thread.start()
-    print("✅ Gunicorn mode: Bot fon rejimida ishga tushdi")
+    print(" Bot ishga tushdi...")
+    application.run_polling()
 
 if __name__ == "__main__":
     main()
