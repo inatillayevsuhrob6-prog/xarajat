@@ -528,6 +528,9 @@ async def handle_expense(update: Update, context: ContextTypes.DEFAULT_TYPE):
 # ---------------------------------------------------------
 # 6. ASOSIY QISM
 # ---------------------------------------------------------
+# ---------------------------------------------------------
+
+# ---------------------------------------------------------
 def main():
     init_db()
     
@@ -538,12 +541,12 @@ def main():
     application.add_handler(CommandHandler("royxat", show_list))
     application.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, handle_expense))
     
-    print(" Bot handlerlari ro'yxatga olindi...")
+    print("🤖 Bot handlerlari ro'yxatga olindi...")
 
     # Gunicorn uchun fon rejimidagi bot
     def run_bot_in_background():
         try:
-            print("🚀 Background bot polling started...")
+            print(" Background bot polling started...")
             application.run_polling(drop_pending_updates=True)
         except Exception as e:
             print(f"❌ Bot error: {e}")
@@ -552,6 +555,10 @@ def main():
     bot_thread.daemon = True
     bot_thread.start()
     print("✅ Gunicorn mode: Bot fon rejimida ishga tushdi")
+
+    # TUZATISH: Flask serverni asosiy jarayonda ishga tushiramiz
+    # Bu Render ga port ochilganligini bildiradi
+    app.run(host='0.0.0.0', port=PORT, use_reloader=False)
 
 if __name__ == "__main__":
     main()
