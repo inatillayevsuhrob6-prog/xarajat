@@ -1,0 +1,482 @@
+
+# index.html fayli
+index_html = '''<!DOCTYPE html>
+<html lang="uz">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Suhrob Xarajat Bot</title>
+    <link rel="stylesheet" href="style.css">
+    <script src="https://telegram.org/js/telegram-web-app.js"></script>
+</head>
+<body>
+    <!-- Start ekrani -->
+    <div id="start-screen" class="screen active">
+        <div class="logo">💰</div>
+        <h1>Suhrob Xarajat Bot</h1>
+        <p class="subtitle">Xarajatlaringizni osongina boshqaring</p>
+        <button class="btn-start" onclick="openApp()">🚀 Ilovani ochish</button>
+    </div>
+
+    <!-- Asosiy ekran -->
+    <div id="main-screen" class="screen">
+        <div class="header">
+            <h2>💰 Yangi xarajat</h2>
+        </div>
+
+        <div class="input-group">
+            <label for="amount">Summa (so'm)</label>
+            <input type="number" id="amount" placeholder="50000" class="neon-input">
+        </div>
+
+        <div class="input-group">
+            <label>Kategoriya</label>
+            <div class="categories">
+                <button class="category-btn" data-category="ovqat" onclick="selectCategory(this)">🍽️ Ovqat</button>
+                <button class="category-btn" data-category="transport" onclick="selectCategory(this)">🚗 Transport</button>
+                <button class="category-btn" data-category="uy" onclick="selectCategory(this)">🏠 Uy</button>
+                <button class="category-btn" data-category="k&#39;ngilochar" onclick="selectCategory(this)">🎬 Ko'ngilochar</button>
+                <button class="category-btn" data-category="xarid" onclick="selectCategory(this)">🛒 Xarid</button>
+                <button class="category-btn" data-category="ta&#39;lim" onclick="selectCategory(this)">📚 Ta'lim</button>
+                <button class="category-btn" data-category="sog&#39;liq" onclick="selectCategory(this)">💊 Sog'liq</button>
+                <button class="category-btn" data-category="boshqa" onclick="selectCategory(this)">📦 Boshqa</button>
+            </div>
+        </div>
+
+        <button class="btn-save" onclick="saveExpense()">✅ Saqlash</button>
+
+        <div class="stats-section">
+            <h3>📊 Statistika</h3>
+            <button class="btn-stats" onclick="showStats('oy')">Oylik</button>
+            <button class="btn-stats" onclick="showStats('hafta')">Haftalik</button>
+            <div id="stats-result" class="stats-result"></div>
+        </div>
+    </div>
+
+    <script src="script.js"></script>
+</body>
+</html>'''
+
+# style.css fayli
+style_css = '''* {
+    margin: 0;
+    padding: 0;
+    box-sizing: border-box;
+}
+
+body {
+    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, sans-serif;
+    background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+    min-height: 100vh;
+    color: white;
+}
+
+.screen {
+    display: none;
+    padding: 20px;
+    max-width: 500px;
+    margin: 0 auto;
+    animation: fadeIn 0.5s ease-in;
+}
+
+.screen.active {
+    display: block;
+}
+
+@keyframes fadeIn {
+    from { opacity: 0; transform: translateY(20px); }
+    to { opacity: 1; transform: translateY(0); }
+}
+
+/* Start ekrani */
+#start-screen {
+    text-align: center;
+    padding-top: 100px;
+}
+
+.logo {
+    font-size: 80px;
+    margin-bottom: 20px;
+    animation: pulse 2s infinite;
+}
+
+@keyframes pulse {
+    0%, 100% { transform: scale(1); }
+    50% { transform: scale(1.1); }
+}
+
+#start-screen h1 {
+    font-size: 32px;
+    margin-bottom: 10px;
+    text-shadow: 0 0 20px rgba(255, 255, 255, 0.5);
+}
+
+.subtitle {
+    font-size: 18px;
+    opacity: 0.9;
+    margin-bottom: 40px;
+}
+
+.btn-start {
+    background: linear-gradient(45deg, #f093fb 0%, #f5576c 100%);
+    color: white;
+    border: none;
+    padding: 20px 50px;
+    font-size: 20px;
+    border-radius: 50px;
+    cursor: pointer;
+    box-shadow: 0 10px 30px rgba(245, 87, 108, 0.4);
+    transition: all 0.3s ease;
+    font-weight: bold;
+}
+
+.btn-start:hover {
+    transform: translateY(-5px);
+    box-shadow: 0 15px 40px rgba(245, 87, 108, 0.6);
+}
+
+/* Asosiy ekran */
+.header h2 {
+    font-size: 28px;
+    margin-bottom: 30px;
+    text-align: center;
+}
+
+.input-group {
+    margin-bottom: 25px;
+}
+
+.input-group label {
+    display: block;
+    margin-bottom: 10px;
+    font-size: 16px;
+    font-weight: 600;
+}
+
+.neon-input {
+    width: 100%;
+    padding: 15px;
+    font-size: 18px;
+    border: 2px solid rgba(255, 255, 255, 0.3);
+    border-radius: 15px;
+    background: rgba(255, 255, 255, 0.1);
+    color: white;
+    backdrop-filter: blur(10px);
+    transition: all 0.3s ease;
+}
+
+.neon-input:focus {
+    outline: none;
+    border-color: #f5576c;
+    box-shadow: 0 0 20px rgba(245, 87, 108, 0.5);
+}
+
+.neon-input::placeholder {
+    color: rgba(255, 255, 255, 0.6);
+}
+
+.categories {
+    display: grid;
+    grid-template-columns: repeat(2, 1fr);
+    gap: 10px;
+}
+
+.category-btn {
+    padding: 15px;
+    border: 2px solid rgba(255, 255, 255, 0.3);
+    border-radius: 12px;
+    background: rgba(255, 255, 255, 0.1);
+    color: white;
+    font-size: 16px;
+    cursor: pointer;
+    transition: all 0.3s ease;
+    backdrop-filter: blur(10px);
+}
+
+.category-btn:hover {
+    background: rgba(255, 255, 255, 0.2);
+    transform: scale(1.05);
+}
+
+.category-btn.selected {
+    background: linear-gradient(45deg, #f093fb 0%, #f5576c 100%);
+    border-color: transparent;
+    box-shadow: 0 5px 20px rgba(245, 87, 108, 0.5);
+}
+
+.btn-save {
+    width: 100%;
+    padding: 18px;
+    background: linear-gradient(45deg, #4facfe 0%, #00f2fe 100%);
+    color: white;
+    border: none;
+    border-radius: 15px;
+    font-size: 20px;
+    font-weight: bold;
+    cursor: pointer;
+    margin: 30px 0;
+    box-shadow: 0 10px 30px rgba(79, 172, 254, 0.4);
+    transition: all 0.3s ease;
+}
+
+.btn-save:hover {
+    transform: translateY(-3px);
+    box-shadow: 0 15px 40px rgba(79, 172, 254, 0.6);
+}
+
+.stats-section {
+    margin-top: 30px;
+    padding: 20px;
+    background: rgba(255, 255, 255, 0.1);
+    border-radius: 15px;
+    backdrop-filter: blur(10px);
+}
+
+.stats-section h3 {
+    margin-bottom: 15px;
+    font-size: 22px;
+}
+
+.btn-stats {
+    padding: 12px 25px;
+    margin: 5px;
+    border: 2px solid rgba(255, 255, 255, 0.3);
+    border-radius: 10px;
+    background: rgba(255, 255, 255, 0.1);
+    color: white;
+    font-size: 16px;
+    cursor: pointer;
+    transition: all 0.3s ease;
+}
+
+.btn-stats:hover {
+    background: rgba(255, 255, 255, 0.2);
+}
+
+.stats-result {
+    margin-top: 20px;
+    padding: 15px;
+    background: rgba(255, 255, 255, 0.15);
+    border-radius: 10px;
+    min-height: 50px;
+}
+
+/* Mobil uchun optimallashtirish */
+@media (max-width: 480px) {
+    .categories {
+        grid-template-columns: 1fr;
+    }
+    
+    #start-screen h1 {
+        font-size: 28px;
+    }
+    
+    .btn-start {
+        padding: 18px 40px;
+        font-size: 18px;
+    }
+}'''
+
+# script.js fayli
+script_js = '''let selectedCategory = null;
+
+// Telegram WebApp ni ishga tushirish
+const tg = window.Telegram.WebApp;
+tg.expand();
+
+function openApp() {
+    document.getElementById('start-screen').classList.remove('active');
+    document.getElementById('main-screen').classList.add('active');
+}
+
+function selectCategory(btn) {
+    // Barcha tugmalardan selected klassini olib tashlash
+    document.querySelectorAll('.category-btn').forEach(b => {
+        b.classList.remove('selected');
+    });
+    
+    // Tanlangan tugmaga selected klassini qo'shish
+    btn.classList.add('selected');
+    selectedCategory = btn.dataset.category;
+}
+
+async function saveExpense() {
+    const amount = document.getElementById('amount').value;
+    
+    if (!amount || !selectedCategory) {
+        tg.showAlert('Iltimos, summa va kategoriyani kiriting!');
+        return;
+    }
+    
+    try {
+        // Backend API ga so'rov yuborish
+        const response = await fetch('/api/save-expense', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+            },
+            body: JSON.stringify({
+                user_id: tg.initDataUnsafe?.user?.id || 1,
+                summa: parseFloat(amount),
+                kategoriya: selectedCategory
+            })
+        });
+        
+        const result = await response.json();
+        
+        if (result.success) {
+            tg.showAlert(`✅ Xarajat saqlandi!\\n\\n${amount} so'm - ${selectedCategory}`);
+            document.getElementById('amount').value = '';
+            document.querySelectorAll('.category-btn').forEach(b => {
+                b.classList.remove('selected');
+            });
+            selectedCategory = null;
+        } else {
+            tg.showAlert('❌ Xatolik yuz berdi!');
+        }
+    } catch (error) {
+        console.error('Error:', error);
+        tg.showAlert('❌ Server bilan bog\'lanishda xatolik!');
+    }
+}
+
+async function showStats(period) {
+    try {
+        const userId = tg.initDataUnsafe?.user?.id || 1;
+        const response = await fetch(`/api/stats?user_id=${userId}&period=${period}`);
+        const data = await response.json();
+        
+        let html = '<strong>Jami:</strong> ' + data.total.toLocaleString() + ' so\'m<br><br>';
+        
+        if (data.categories && data.categories.length > 0) {
+            data.categories.forEach(cat => {
+                const emojis = {
+                    'ovqat': '🍽️',
+                    'transport': '🚗',
+                    'uy': '🏠',
+                    'ko\'ngilochar': '🎬',
+                    'xarid': '🛒',
+                    'ta\'lim': '📚',
+                    'sog\'liq': '💊',
+                    'boshqa': '📦'
+                };
+                const emoji = emojis[cat.kategoriya] || '📦';
+                html += `${emoji} <strong>${cat.kategoriya}:</strong> ${cat.summa.toLocaleString()} so'm (${cat.count} ta)<br>`;
+            });
+        } else {
+            html += 'Bu davrda xarajatlar yo\'q.';
+        }
+        
+        document.getElementById('stats-result').innerHTML = html;
+    } catch (error) {
+        console.error('Error:', error);
+        document.getElementById('stats-result').innerHTML = '❌ Ma\'lumotlarni yuklashda xatolik!';
+    }
+}'''
+
+# app.py - Flask backend
+app_py = '''from flask import Flask, request, jsonify
+import sqlite3
+from datetime import datetime, timedelta
+
+app = Flask(__name__)
+
+DB_NAME = "xarajatlar.db"
+
+def init_db():
+    conn = sqlite3.connect(DB_NAME)
+    cursor = conn.cursor()
+    cursor.execute("""
+        CREATE TABLE IF NOT EXISTS xarajatlar (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            user_id INTEGER,
+            summa REAL,
+            kategoriya TEXT,
+            sana DATE,
+            vaqt TIME
+        )
+    """)
+    conn.commit()
+    conn.close()
+
+@app.route('/api/save-expense', methods=['POST'])
+def save_expense():
+    data = request.json
+    user_id = data.get('user_id')
+    summa = data.get('summa')
+    kategoriya = data.get('kategoriya')
+    
+    if not all([user_id, summa, kategoriya]):
+        return jsonify({'success': False, 'error': 'Ma\'lumotlar yetarli emas'})
+    
+    conn = sqlite3.connect(DB_NAME)
+    cursor = conn.cursor()
+    now = datetime.now()
+    cursor.execute(
+        "INSERT INTO xarajatlar (user_id, summa, kategoriya, sana, vaqt) VALUES (?, ?, ?, ?, ?)",
+        (user_id, summa, kategoriya, now.date(), now.time())
+    )
+    conn.commit()
+    conn.close()
+    
+    return jsonify({'success': True})
+
+@app.route('/api/stats', methods=['GET'])
+def get_stats():
+    user_id = request.args.get('user_id')
+    period = request.args.get('period', 'oy')
+    
+    conn = sqlite3.connect(DB_NAME)
+    cursor = conn.cursor()
+    
+    now = datetime.now()
+    if period == "hafta":
+        start_date = (now - timedelta(days=7)).date()
+    else:
+        start_date = now.replace(day=1).date()
+    
+    cursor.execute(
+        "SELECT kategoriya, SUM(summa) as summa, COUNT(*) as count FROM xarajatlar WHERE user_id=? AND sana>=? GROUP BY kategoriya ORDER BY SUM(summa) DESC",
+        (user_id, start_date)
+    )
+    categories = [{'kategoriya': row[0], 'summa': row[1], 'count': row[2]} for row in cursor.fetchall()]
+    
+    cursor.execute(
+        "SELECT SUM(summa) FROM xarajatlar WHERE user_id=? AND sana>=?",
+        (user_id, start_date)
+    )
+    total = cursor.fetchone()[0] or 0
+    
+    conn.close()
+    
+    return jsonify({'total': total, 'categories': categories})
+
+if __name__ == '__main__':
+    init_db()
+    app.run(debug=True, host='0.0.0.0', port=5000)'''
+
+# Fayllarni yaratish
+with open('index.html', 'w', encoding='utf-8') as f:
+    f.write(index_html)
+
+with open('style.css', 'w', encoding='utf-8') as f:
+    f.write(style_css)
+
+with open('script.js', 'w', encoding='utf-8') as f:
+    f.write(script_js)
+
+with open('app.py', 'w', encoding='utf-8') as f:
+    f.write(app_py)
+
+print("✅ Barcha fayllar yaratildi!")
+print("\n📁 Fayllar:")
+print("  - index.html (Asosiy sahifa)")
+print("  - style.css (Dizayn)")
+print("  - script.js (JavaScript)")
+print("  - app.py (Backend server)")
+print("\n🚀 Ishga tushirish:")
+print("  1. pip install flask")
+print("  2. python app.py")
+print("  3. Brauzerda http://localhost:5000 oching")
+
+
