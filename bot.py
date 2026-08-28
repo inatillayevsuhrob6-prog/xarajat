@@ -23,11 +23,9 @@ app = Flask(__name__, static_folder='.', static_url_path='')
 # ---------------------------------------------------------
 # XAVFSIZLIK: Telegram initData ni tekshirish
 # ---------------------------------------------------------
-# bot.py dagi validate_telegram_data funksiyasini shunga almashtiring:
 def validate_telegram_data(init_data: str, bot_token: str) -> dict | None:
     """Telegramdan kelgan ma'lumotni haqiqiyligini tekshiradi"""
     if not init_data or len(init_data) < 10:
-        print(f"⚠️ initData bo'sh yoki juda qisqa: {init_data[:20] if init_data else 'None'}")
         return None
         
     try:
@@ -39,14 +37,10 @@ def validate_telegram_data(init_data: str, bot_token: str) -> dict | None:
         calculated_hash = hmac.new(secret_key, data_check_string.encode(), hashlib.sha256).hexdigest()
         
         if hmac.compare_digest(calculated_hash, received_hash):
-            user_id = int(parsed_data['user']['id'])
-            print(f"✅ User validated: {user_id}")
-            return {'user_id': user_id}
-        else:
-            print(f"❌ Hash mismatch! Calculated: {calculated_hash[:10]}, Received: {received_hash[:10]}")
+            return {'user_id': int(parsed_data['user']['id'])}
             
     except Exception as e:
-        print(f"❌ Validation Error: {e}")
+        print(f"Validation Error: {e}")
     
     return None
 
@@ -56,6 +50,7 @@ def validate_telegram_data(init_data: str, bot_token: str) -> dict | None:
 def init_db():
     conn = sqlite3.connect(DB_NAME)
     cursor = conn.cursor()
+    # user_code o'rniga user_id qaytarildi
     cursor.execute("DROP TABLE IF EXISTS xarajatlar")
     cursor.execute("""
         CREATE TABLE IF NOT EXISTS xarajatlar (
@@ -147,7 +142,7 @@ def get_recent_expenses(user_id, limit=20):
     return rows
 
 # ---------------------------------------------------------
-# 3. FUTURISTIK DIZAYN
+# 3. FUTURISTIK DIZAYN (LOGIN OYNASISIZ)
 # ---------------------------------------------------------
 HTML_CONTENT = """
 <!DOCTYPE html>
@@ -155,7 +150,7 @@ HTML_CONTENT = """
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Xarajat</title>
+    <title>Xarajat Hisoblagich</title>
     <script src="https://telegram.org/js/telegram-web-app.js"></script>
     <style>
         :root {
@@ -194,22 +189,15 @@ HTML_CONTENT = """
         
         .item-actions { display: flex; gap: 8px; margin-left: 10px; }
         .act-btn { 
-            background: rgba(255, 255, 255, 0.05); 
-            border: 1px solid rgba(255, 255, 255, 0.1); 
-            width: 36px; height: 36px; 
-            border-radius: 10px; 
-            cursor: pointer; 
-            display: flex; align-items: center; justify-content: center; 
-            transition: all 0.3s ease;
-            backdrop-filter: blur(5px);
+            background: rgba(255, 255, 255, 0.05); border: 1px solid rgba(255, 255, 255, 0.1); 
+            width: 36px; height: 36px; border-radius: 10px; cursor: pointer; 
+            display: flex; align-items: center; justify-content: center; transition: all 0.3s ease;
         }
         .act-btn svg { width: 18px; height: 18px; fill: currentColor; }
-
-        .act-btn.edit { color: #00f3ff; border-color: rgba(0, 243, 255, 0.3); }
-        .act-btn.edit:hover { background: rgba(0, 243, 255, 0.15); color: #fff; box-shadow: 0 0 15px rgba(0, 243, 255, 0.6); transform: translateY(-2px); }
-
-        .act-btn.del { color: #ff2a6d; border-color: rgba(255, 42, 109, 0.3); }
-        .act-btn.del:hover { background: rgba(255, 42, 109, 0.15); color: #fff; box-shadow: 0 0 15px rgba(255, 42, 109, 0.6); transform: translateY(-2px); }
+        .act-btn.edit { color: #00f3ff; }
+        .act-btn.edit:hover { background: rgba(0, 243, 255, 0.15); }
+        .act-btn.del { color: #ff2a6d; }
+        .act-btn.del:hover { background: rgba(255, 42, 109, 0.15); }
         
         .total-line { font-size: 18px; color: white; font-weight: bold; margin-bottom: 10px; display: block;}
         .toast { position: fixed; bottom: 20px; left: 50%; transform: translateX(-50%); background: var(--primary); color: black; padding: 12px 24px; border-radius: 30px; font-weight: bold; opacity: 0; transition: 0.3s; pointer-events: none; z-index: 1000; }
@@ -231,7 +219,7 @@ HTML_CONTENT = """
                 <div class="cat-btn" onclick="sel(this,'Transport')"> Transport</div>
                 <div class="cat-btn" onclick="sel(this,'Uy')"> Uy</div>
                 <div class="cat-btn" onclick="sel(this,'Ko\'ngilochar')"> Ko\'ngilochar</div>
-                <div class="cat-btn" onclick="sel(this,'Xarid')">🛒 Xarid</div>
+                <div class="cat-btn" onclick="sel(this,'Xarid')"> Xarid</div>
                 <div class="cat-btn" onclick="sel(this,'Boshqa')"> Boshqa</div>
             </div>
             <input type="text" id="custom-cat" placeholder="Yoki o'zingiz yozing..." oninput="clearSel()">
@@ -258,7 +246,7 @@ HTML_CONTENT = """
         
         let cat = null;
         let currentView = 'oy';
-        // initData ni olish (agar mavjud bo'lsa)
+        // initData ni olish
         const initData = tg.initData || ""; 
 
         function sel(el, c) {
@@ -279,7 +267,7 @@ HTML_CONTENT = """
             const s = document.getElementById('amount').value;
             const eid = document.getElementById('edit-id').value;
             if(!cat) cat = document.getElementById('custom-cat').value;
-            if(!s || !cat) return showToast("️ Summa va kategoriyani kiriting!");
+            if(!s || !cat) return showToast(" Summa va kategoriyani kiriting!");
             
             const url = eid ? '/api/update' : '/api/save';
             const body = eid 
@@ -288,7 +276,7 @@ HTML_CONTENT = """
 
             try {
                 await fetch(url, {method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify(body)});
-                showToast(eid ? "️ Yangilandi!" : "✅ Saqlandi!");
+                showToast(eid ? " Yangilandi!" : "✅ Saqlandi!");
                 resetForm();
                 loadView(currentView);
             } catch(e) { showToast(" Xatolik!"); }
@@ -339,64 +327,62 @@ HTML_CONTENT = """
                     headers: {'Content-Type': 'application/json'},
                     body: JSON.stringify({initData: initData})
                 });
-                showToast("️ O'chirildi!");
+                showToast(" O'chirildi!");
                 loadView(currentView);
             } catch(e) { showToast(" Xatolik!"); }
         }
 
-        // script.js qismidagi loadView funksiyasini shunga almashtiring:
-async function loadView(view) {
-    currentView = view;
-    document.getElementById('btn-oy').classList.toggle('active', view==='oy');
-    document.getElementById('btn-hafta').classList.toggle('active', view==='hafta');
-    
-    const resDiv = document.getElementById('res');
-    resDiv.innerHTML = "<div style='opacity:0.5'>Yuklanmoqda...</div>";
+        async function loadView(view) {
+            currentView = view;
+            document.getElementById('btn-oy').classList.toggle('active', view==='oy');
+            document.getElementById('btn-hafta').classList.toggle('active', view==='hafta');
+            
+            const resDiv = document.getElementById('res');
+            resDiv.innerHTML = "<div style='opacity:0.5'>Yuklanmoqda...</div>";
 
-    // initData mavjudligini tekshirish
-    if (!initData || initData.length < 10) {
-        resDiv.innerHTML = `<div style='color:#ff2a6d; text-align:center;'>⚠️ Telegram ma'lumotlari topilmadi.<br>Iltimos, ilovani qaytadan oching.</div>`;
-        return;
-    }
+            try {
+                const r = await fetch(`/api/stats?period=${view}&initData=${encodeURIComponent(initData)}`);
+                const d = await r.json();
+                
+                // Agar xavfsizlik xatosi bo'lsa (403)
+                if(d.error) {
+                    resDiv.innerHTML = `<div style='color:#aaa; text-align:center;'>${d.error}<br><small>(Faqat Telegram ichida ishlaydi)</small></div>`;
+                    return;
+                }
 
-    try {
-        const r = await fetch(`/api/stats?period=${view}&initData=${encodeURIComponent(initData)}`);
-        const d = await r.json();
-        
-        if(d.error) {
-            resDiv.innerHTML = `<div style='color:#aaa; text-align:center;'>${d.error}</div>`;
-            return;
+                let html = `<span class="total-line">Jami: ${d.total.toLocaleString()} so'm</span>`;
+                
+                if(d.categories && d.categories.length > 0) {
+                    d.categories.forEach(c => {
+                        const sum = c[2] || 0;
+                        const name = c[1] || "Noma'lum";
+                        const cnt = c[3] || 0;
+                        const id = c[0] || 0;
+
+                        html += `<div class="list-item">
+                            <div class="item-info">
+                                <div class="item-sum">${sum.toLocaleString()} so'm</div>
+                                <div class="item-cat">${name} (${cnt} ta)</div>
+                            </div>
+                            <div class="item-actions">
+                                <button class="act-btn edit" onclick="editItem(${id}, ${sum}, '${name}')">
+                                    <svg viewBox="0 0 24 24"><path d="M3 17.25V21h3.75L17.81 9.94l-3.75-3.75L3 17.25zM20.71 7.04c.39-.39.39-1.02 0-1.41l-2.34-2.34c-.39-.39-1.02-.39-1.41 0l-1.83 1.83 3.75 3.75 1.83-1.83z"/></svg>
+                                </button>
+                                <button class="act-btn del" onclick="deleteItem(${id})">
+                                    <svg viewBox="0 0 24 24"><path d="M6 19c0 1.1.9 2 2 2h8c1.1 0 2-.9 2-2V7H6v12zM19 4h-3.5l-1-1h-5l-1 1H5v2h14V4z"/></svg>
+                                </button>
+                            </div>
+                        </div>`;
+                    });
+                } else {
+                    html += "<div style='opacity:0.7; text-align:center; padding:10px;'>Bu davrda xarajatlar yo'q.</div>";
+                }
+                resDiv.innerHTML = html;
+            } catch(e) {
+                console.error(e);
+                resDiv.innerHTML = "<div style='color:var(--danger)'>Ma'lumot yuklashda xatolik!</div>";
+            }
         }
-
-        let html = `<span class="total-line">Jami: ${d.total.toLocaleString()} so'm</span>`;
-        
-        if(d.categories && d.categories.length > 0) {
-            d.categories.forEach(c => {
-                const sum = c[2] || 0;
-                const name = c[1] || "Noma'lum";
-                const cnt = c[3] || 0;
-                const id = c[0] || 0;
-
-                html += `<div class="list-item">
-                    <div class="item-info">
-                        <div class="item-sum">${sum.toLocaleString()} so'm</div>
-                        <div class="item-cat">${name} (${cnt} ta)</div>
-                    </div>
-                    <div class="item-actions">
-                        <button class="act-btn edit" onclick="editItem(${id}, ${sum}, '${name}')">️</button>
-                        <button class="act-btn del" onclick="deleteItem(${id})">️</button>
-                    </div>
-                </div>`;
-            });
-        } else {
-            html += "<div style='opacity:0.7; text-align:center; padding:10px;'>Bu davrda xarajatlar yo'q.</div>";
-        }
-        resDiv.innerHTML = html;
-    } catch(e) {
-        console.error(e);
-        resDiv.innerHTML = "<div style='color:var(--danger)'>Tarmoq xatosi!</div>";
-    }
-}
         
         loadView('oy');
     </script>
@@ -416,7 +402,6 @@ def api_save():
     data = request.json
     auth = validate_telegram_data(data.get('initData', ''), BOT_TOKEN)
     
-    # Agar initData bo'lmasa (brauzer testi), xatolik emas, balki ogohlantirish
     if not auth:
         return jsonify({"success": False, "error": "Telegram orqali kiring"}), 403
         
@@ -466,7 +451,7 @@ def api_stats():
     return jsonify({"total": total, "categories": cats})
 
 # ---------------------------------------------------------
-# 5. TELEGRAM BOT LOGIKASI
+# 5. TELEGRAM BOT LOGIKASI (TIKLANDI)
 # ---------------------------------------------------------
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     user = update.message.from_user
@@ -503,18 +488,6 @@ async def show_stats(update: Update, context: ContextTypes.DEFAULT_TYPE):
         
     await update.message.reply_text(txt, parse_mode='Markdown')
 
-async def show_list(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    uid = update.message.from_user.id
-    rows = get_recent_expenses(uid, 10)
-    
-    if not rows: txt = " Hali xarajatlar yo'q."
-    else:
-        txt = " *So'nggi xarajatlar:*\\n\\n"
-        for i, r in enumerate(rows, 1):
-            txt += f"{i}. {r[2]}: {r[1]:,.0f} so'm ({r[3]} {r[4]})\\n"
-            
-    await update.message.reply_text(txt, parse_mode='Markdown')
-
 async def handle_expense(update: Update, context: ContextTypes.DEFAULT_TYPE):
     text = update.message.text.strip()
     if text in ["📊 Statistika", " Ro'yxat"]: return
@@ -535,20 +508,15 @@ async def handle_expense(update: Update, context: ContextTypes.DEFAULT_TYPE):
         await update.message.reply_text(" Raqam yozing.")
 
 # ---------------------------------------------------------
-# 6. ASOSIY QISM (TUZATILGAN)
-# ---------------------------------------------------------
-# ---------------------------------------------------------
-# 6. ASOSIY QISM (TO'LIQ TUZATILGAN)
+# 6. ASOSIY QISM
 # ---------------------------------------------------------
 def main():
     init_db()
     
-    # Botni yaratish
     application = Application.builder().token(BOT_TOKEN).build()
     
     application.add_handler(CommandHandler("start", start))
     application.add_handler(CommandHandler("stats", show_stats))
-    application.add_handler(CommandHandler("royxat", show_list))
     application.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, handle_expense))
     
     print(" Bot handlerlari ro'yxatga olindi...")
@@ -560,37 +528,14 @@ def main():
     flask_thread = Thread(target=run_flask_server)
     flask_thread.daemon = True
     flask_thread.start()
-    print(f"🌐 Web server fon rejimida ishga tushdi: http://localhost:{PORT}")
+    print(f" Web server fon rejimida ishga tushdi: http://localhost:{PORT}")
 
-    # Asosiy jarayonda BOTNI ishga tushiramiz (set_wakeup_fd xatosini oldini olish uchun)
+    # Asosiy jarayonda BOTNI ishga tushiramiz
     try:
         print("🚀 Telegram bot polling rejimida ishga tushmoqda...")
         application.run_polling(drop_pending_updates=True)
     except Exception as e:
         print(f"❌ Bot xatosi: {e}")
-
-if __name__ == "__main__":
-    main()
-    import asyncio
-    
-    def run_bot_thread():
-        try:
-            # Yangi event loop yaratish
-            loop = asyncio.new_event_loop()
-            asyncio.set_event_loop(loop)
-            
-            print("🚀 Background bot polling started...")
-            loop.run_until_complete(application.run_polling(drop_pending_updates=True))
-        except Exception as e:
-            print(f"❌ Bot error: {e}")
-
-    bot_thread = Thread(target=run_bot_thread)
-    bot_thread.daemon = True
-    bot_thread.start()
-    print("✅ Gunicorn mode: Bot fon rejimida ishga tushdi")
-
-    # Flask serverni asosiy jarayonda ishga tushiramiz
-    app.run(host='0.0.0.0', port=PORT, use_reloader=False)
 
 if __name__ == "__main__":
     main()
