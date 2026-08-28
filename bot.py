@@ -3,7 +3,7 @@ import sqlite3
 from datetime import datetime, timedelta
 from threading import Thread
 from flask import Flask, request, jsonify
-from telegram import Update, KeyboardButton, ReplyKeyboardMarkup
+from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup, ReplyKeyboardMarkup, WebAppInfo
 from telegram.ext import Application, CommandHandler, MessageHandler, filters, ContextTypes
 
 # ---------------------------------------------------------
@@ -405,11 +405,6 @@ def api_stats():
 # ---------------------------------------------------------
 # 5. TELEGRAM BOT LOGIKASI
 # ---------------------------------------------------------
-keyboard = ReplyKeyboardMarkup([
-    [" Statistika", "📜 Ro'yxat"],
-    [" Yordam"]
-], resize_keyboard=True)
-
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     user = update.message.from_user
     name = user.first_name or "Do'stim"
@@ -417,14 +412,20 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     msg = (
         f"👋 *Salom, {name}!*\n\n"
         "🚀 Futuristik Xarajat Botga xush kelibsiz!\n\n"
-        "📱 *Ilovani ochish:*\n"
-        f"`{WEB_URL}`\n\n"
+        "📱 Quyidagi tugma orqali ilovani oching:"
     )
+
+    button = InlineKeyboardButton(
+        "🚀 Ilovani ochish",
+        web_app=WebAppInfo(url=WEB_URL)
+    )
+
+    keyboard_inline = InlineKeyboardMarkup([[button]])
 
     await update.message.reply_text(
         msg,
         parse_mode='Markdown',
-        reply_markup=keyboard
+        reply_markup=keyboard_inline
     )
 
 async def handle_expense(update: Update, context: ContextTypes.DEFAULT_TYPE):
