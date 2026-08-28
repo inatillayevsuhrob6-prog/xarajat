@@ -5,9 +5,8 @@ import hashlib
 from datetime import datetime, timedelta
 from threading import Thread
 from urllib.parse import parse_qsl
-# TUZATISH: 'headers' olib tashlandi
 from flask import Flask, request, jsonify 
-from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup, ReplyKeyboardMarkup, WebAppInfo
+from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup, WebAppInfo
 from telegram.ext import Application, CommandHandler, MessageHandler, filters, ContextTypes
 
 # ---------------------------------------------------------
@@ -22,24 +21,21 @@ PORT = int(os.environ.get('PORT', 5000))
 app = Flask(__name__, static_folder='.', static_url_path='')
 
 # ---------------------------------------------------------
-# XAVFSIZLIK: Telegram initData ni tekshirish funksiyasi
+# XAVFSIZLIK: Telegram initData ni tekshirish
 # ---------------------------------------------------------
 def validate_telegram_data(init_data: str, bot_token: str) -> dict | None:
     """Telegramdan kelgan ma'lumotni haqiqiyligini tekshiradi"""
+    if not init_data or len(init_data) < 10:
+        return None
+        
     try:
         parsed_data = dict(parse_qsl(init_data))
         received_hash = parsed_data.pop('hash')
         
-        # Ma'lumotlarni tartiblab, imzo yaratamiz
         data_check_string = '\n'.join(f"{k}={v}" for k, v in sorted(parsed_data.items()))
-        
-        # Maxfiy kalit yaratish (Web App uchun)
         secret_key = hmac.new(b"WebAppData", bot_token.encode(), hashlib.sha256).digest()
-        
-        # Hisoblangan hash
         calculated_hash = hmac.new(secret_key, data_check_string.encode(), hashlib.sha256).hexdigest()
         
-        # Agar hash lar mos kelsa, user_id ni qaytaramiz
         if hmac.compare_digest(calculated_hash, received_hash):
             return {'user_id': int(parsed_data['user']['id'])}
             
@@ -216,7 +212,7 @@ HTML_CONTENT = """
 </head>
 <body>
     <div class="container">
-        <h1>Xarajat Hisoblagich</h1>
+        <h1>XARAJAT HISOBLAGICH</h1>
         
         <div class="card">
             <h3 id="form-title">Yangi xarajat</h3>
@@ -251,11 +247,13 @@ HTML_CONTENT = """
     <div id="toast" class="toast">✅ Saqlandi!</div>
 
     <script>
-        const tg = window.Telegram.WebApp; tg.expand();
+        const tg = window.Telegram.WebApp || {}; 
+        if(tg.expand) tg.expand();
+        
         let cat = null;
         let currentView = 'oy';
-        // INIT DATA NI SERVERGA YUBORISH UCHUN SAQLAB OLAMIZ
-        const initData = tg.initData; 
+        // initData ni olish (agar mavjud bo'lsa)
+        const initData = tg.initData || ""; 
 
         function sel(el, c) {
             document.querySelectorAll('.cat-btn').forEach(b=>b.classList.remove('active'));
@@ -330,7 +328,6 @@ HTML_CONTENT = """
         async function deleteItem(id) {
             if(!confirm("Rostdan ham o'chirmoqchimisiz?")) return;
             try {
-                // DELETE DA HAM INIT DATA YUBORILADI
                 await fetch(`/api/delete?id=${id}`, {
                     method:'POST',
                     headers: {'Content-Type': 'application/json'},
@@ -338,7 +335,7 @@ HTML_CONTENT = """
                 });
                 showToast("️ O'chirildi!");
                 loadView(currentView);
-            } catch(e) { showToast("❌ Xatolik!"); }
+            } catch(e) { showToast(" Xatolik!"); }
         }
 
         async function loadView(view) {
@@ -350,10 +347,15 @@ HTML_CONTENT = """
             resDiv.innerHTML = "<div style='opacity:0.5'>Yuklanmoqda...</div>";
 
             try {
-                // STATISTIKA UCHUN HAM INIT DATA KERAK
                 const r = await fetch(`/api/stats?period=${view}&initData=${encodeURIComponent(initData)}`);
                 const d = await r.json();
                 
+                // Agar xavfsizlik xatosi bo'lsa (403), foydalanuvchiga tushunarli xabar
+                if(d.error) {
+                    resDiv.innerHTML = `<div style='color:#aaa; text-align:center;'>${d.error}<br><small>(Faqat Telegram ichida ishlaydi)</small></div>`;
+                    return;
+                }
+
                 let html = `<span class="total-line">Jami: ${d.total.toLocaleString()} so'm</span>`;
                 
                 if(d.categories && d.categories.length > 0) {
@@ -395,7 +397,7 @@ HTML_CONTENT = """
 """
 
 # ---------------------------------------------------------
-# 4. FLASK ROUTES (XAVFSIZLIK BILAN)
+# 4. FLASK ROUTES
 # ---------------------------------------------------------
 @app.route('/')
 def home():
@@ -404,11 +406,11 @@ def home():
 @app.route('/api/save', methods=['POST'])
 def api_save():
     data = request.json
-    # USER_ID NI FRONTEND DAN EMAS, TELEGRAM IMZOSIDAN OLAMIZ
     auth = validate_telegram_data(data.get('initData', ''), BOT_TOKEN)
     
+    # Agar initData bo'lmasa (brauzer testi), xatolik emas, balki ogohlantirish
     if not auth:
-        return jsonify({"success": False, "error": "Invalid Telegram Data"}), 403
+        return jsonify({"success": False, "error": "Telegram orqali kiring"}), 403
         
     if data.get('summa'):
         save_expense_to_db(auth['user_id'], float(data['summa']), data.get('kategoriya','Boshqa'))
@@ -421,7 +423,7 @@ def api_update():
     auth = validate_telegram_data(data.get('initData', ''), BOT_TOKEN)
     
     if not auth:
-        return jsonify({"success": False, "error": "Invalid Telegram Data"}), 403
+        return jsonify({"success": False, "error": "Telegram orqali kiring"}), 403
 
     if data.get('id'):
         success = update_expense_in_db(data['id'], auth['user_id'], float(data['summa']), data.get('kategoriya'))
@@ -434,7 +436,7 @@ def api_delete():
     auth = validate_telegram_data(data.get('initData', ''), BOT_TOKEN)
     
     if not auth:
-        return jsonify({"success": False, "error": "Invalid Telegram Data"}), 403
+        return jsonify({"success": False, "error": "Telegram orqali kiring"}), 403
 
     eid = request.args.get('id')
     if eid:
@@ -444,12 +446,11 @@ def api_delete():
 
 @app.route('/api/stats', methods=['GET'])
 def api_stats():
-    # GET so'rovida initData URL parametridan olinadi
     raw_init_data = request.args.get('initData', '')
     auth = validate_telegram_data(raw_init_data, BOT_TOKEN)
     
     if not auth:
-        return jsonify({"success": False, "error": "Invalid Telegram Data"}), 403
+        return jsonify({"success": False, "error": "Telegram orqali kiring"}), 403
 
     p = request.args.get('period', 'oy')
     res, total = get_statistics_from_db(auth['user_id'], p)
@@ -464,13 +465,13 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     name = user.first_name or "Do'stim"
 
     msg = (
-        f"👋 *Salom, {name}!*\n\n"
+        f" *Salom, {name}!*\n\n"
         "🚀 Futuristik Xarajat Botga xush kelibsiz!\n\n"
         "📱 Quyidagi tugma orqali ilovani oching:"
     )
 
     button = InlineKeyboardButton(
-        "🚀 Ilovani ochish",
+        " Ilovani ochish",
         web_app=WebAppInfo(url=WEB_URL)
     )
 
@@ -526,10 +527,7 @@ async def handle_expense(update: Update, context: ContextTypes.DEFAULT_TYPE):
         await update.message.reply_text(" Raqam yozing.")
 
 # ---------------------------------------------------------
-# 6. ASOSIY QISM
-# ---------------------------------------------------------
-# ---------------------------------------------------------
-
+# 6. ASOSIY QISM (TUZATILGAN)
 # ---------------------------------------------------------
 def main():
     init_db()
@@ -543,21 +541,27 @@ def main():
     
     print("🤖 Bot handlerlari ro'yxatga olindi...")
 
-    # Gunicorn uchun fon rejimidagi bot
-    def run_bot_in_background():
+    # Botni alohida jarayonda ishga tushirish (Gunicorn uchun)
+    # set_wakeup_fd xatosini oldini olish uchun asyncio loop ni to'g'ri ishlatamiz
+    import asyncio
+    
+    def run_bot_thread():
         try:
-            print(" Background bot polling started...")
-            application.run_polling(drop_pending_updates=True)
+            # Yangi event loop yaratish
+            loop = asyncio.new_event_loop()
+            asyncio.set_event_loop(loop)
+            
+            print("🚀 Background bot polling started...")
+            loop.run_until_complete(application.run_polling(drop_pending_updates=True))
         except Exception as e:
             print(f"❌ Bot error: {e}")
 
-    bot_thread = Thread(target=run_bot_in_background)
+    bot_thread = Thread(target=run_bot_thread)
     bot_thread.daemon = True
     bot_thread.start()
     print("✅ Gunicorn mode: Bot fon rejimida ishga tushdi")
 
-    # TUZATISH: Flask serverni asosiy jarayonda ishga tushiramiz
-    # Bu Render ga port ochilganligini bildiradi
+    # Flask serverni asosiy jarayonda ishga tushiramiz
     app.run(host='0.0.0.0', port=PORT, use_reloader=False)
 
 if __name__ == "__main__":
