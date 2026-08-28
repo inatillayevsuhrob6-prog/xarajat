@@ -1,10 +1,7 @@
 import os
 import sqlite3
-import hmac
-import hashlib
 from datetime import datetime, timedelta
 from threading import Thread
-from urllib.parse import parse_qsl
 from flask import Flask, request, jsonify 
 from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup, WebAppInfo
 from telegram.ext import Application, CommandHandler, MessageHandler, filters, ContextTypes
@@ -21,36 +18,11 @@ PORT = int(os.environ.get('PORT', 5000))
 app = Flask(__name__, static_folder='.', static_url_path='')
 
 # ---------------------------------------------------------
-# XAVFSIZLIK: Telegram initData ni tekshirish
-# ---------------------------------------------------------
-def validate_telegram_data(init_data: str, bot_token: str) -> dict | None:
-    """Telegramdan kelgan ma'lumotni haqiqiyligini tekshiradi"""
-    if not init_data or len(init_data) < 10:
-        return None
-        
-    try:
-        parsed_data = dict(parse_qsl(init_data))
-        received_hash = parsed_data.pop('hash')
-        
-        data_check_string = '\n'.join(f"{k}={v}" for k, v in sorted(parsed_data.items()))
-        secret_key = hmac.new(b"WebAppData", bot_token.encode(), hashlib.sha256).digest()
-        calculated_hash = hmac.new(secret_key, data_check_string.encode(), hashlib.sha256).hexdigest()
-        
-        if hmac.compare_digest(calculated_hash, received_hash):
-            return {'user_id': int(parsed_data['user']['id'])}
-            
-    except Exception as e:
-        print(f"Validation Error: {e}")
-    
-    return None
-
-# ---------------------------------------------------------
-# 2. MA'LUMOTLAR BAZASI
+# 2. MA'LUMOTLAR BAZASI (ODDIY VA SODDA)
 # ---------------------------------------------------------
 def init_db():
     conn = sqlite3.connect(DB_NAME)
     cursor = conn.cursor()
-    # user_code o'rniga user_id qaytarildi
     cursor.execute("DROP TABLE IF EXISTS xarajatlar")
     cursor.execute("""
         CREATE TABLE IF NOT EXISTS xarajatlar (
@@ -142,7 +114,7 @@ def get_recent_expenses(user_id, limit=20):
     return rows
 
 # ---------------------------------------------------------
-# 3. FUTURISTIK DIZAYN (LOGIN OYNASISIZ)
+# 3. FUTURISTIK DIZAYN (HECH QANDAY CHEKLOVSIZ)
 # ---------------------------------------------------------
 HTML_CONTENT = """
 <!DOCTYPE html>
@@ -246,8 +218,8 @@ HTML_CONTENT = """
         
         let cat = null;
         let currentView = 'oy';
-        // initData ni olish
-        const initData = tg.initData || ""; 
+        // Oddiy user_id aniqlash (Telegram bo'lsa initData dan, bo'lmasa test uchun 123)
+        const uid = tg.initDataUnsafe?.user?.id || 123; 
 
         function sel(el, c) {
             document.querySelectorAll('.cat-btn').forEach(b=>b.classList.remove('active'));
@@ -270,9 +242,12 @@ HTML_CONTENT = """
             if(!s || !cat) return showToast(" Summa va kategoriyani kiriting!");
             
             const url = eid ? '/api/update' : '/api/save';
-            const body = eid 
-                ? {id: eid, summa:s, kategoriya:cat, initData: initData}
-                : {summa:s, kategoriya:cat, initData: initData};
+            const body = {
+                user_id: uid,
+                summa: s, 
+                kategoriya: cat
+            };
+            if (eid) body.id = eid;
 
             try {
                 await fetch(url, {method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify(body)});
@@ -325,7 +300,7 @@ HTML_CONTENT = """
                 await fetch(`/api/delete?id=${id}`, {
                     method:'POST',
                     headers: {'Content-Type': 'application/json'},
-                    body: JSON.stringify({initData: initData})
+                    body: JSON.stringify({user_id: uid})
                 });
                 showToast(" O'chirildi!");
                 loadView(currentView);
@@ -341,15 +316,10 @@ HTML_CONTENT = """
             resDiv.innerHTML = "<div style='opacity:0.5'>Yuklanmoqda...</div>";
 
             try {
-                const r = await fetch(`/api/stats?period=${view}&initData=${encodeURIComponent(initData)}`);
+                // Hech qanday initData yuborilmaydi, faqat user_id
+                const r = await fetch(`/api/stats?period=${view}&user_id=${uid}`);
                 const d = await r.json();
                 
-                // Agar xavfsizlik xatosi bo'lsa (403)
-                if(d.error) {
-                    resDiv.innerHTML = `<div style='color:#aaa; text-align:center;'>${d.error}<br><small>(Faqat Telegram ichida ishlaydi)</small></div>`;
-                    return;
-                }
-
                 let html = `<span class="total-line">Jami: ${d.total.toLocaleString()} so'm</span>`;
                 
                 if(d.categories && d.categories.length > 0) {
@@ -391,7 +361,7 @@ HTML_CONTENT = """
 """
 
 # ---------------------------------------------------------
-# 4. FLASK ROUTES
+# 4. FLASK ROUTES (ODDIY VA TO'G'RIDAN-TO'G'RI)
 # ---------------------------------------------------------
 @app.route('/')
 def home():
@@ -400,58 +370,50 @@ def home():
 @app.route('/api/save', methods=['POST'])
 def api_save():
     data = request.json
-    auth = validate_telegram_data(data.get('initData', ''), BOT_TOKEN)
+    user_id = data.get('user_id')
     
-    if not auth:
-        return jsonify({"success": False, "error": "Telegram orqali kiring"}), 403
+    if not user_id: return jsonify({"success": False}), 400
         
     if data.get('summa'):
-        save_expense_to_db(auth['user_id'], float(data['summa']), data.get('kategoriya','Boshqa'))
+        save_expense_to_db(int(user_id), float(data['summa']), data.get('kategoriya','Boshqa'))
         return jsonify({"success": True})
     return jsonify({"success": False}), 400
 
 @app.route('/api/update', methods=['POST'])
 def api_update():
     data = request.json
-    auth = validate_telegram_data(data.get('initData', ''), BOT_TOKEN)
-    
-    if not auth:
-        return jsonify({"success": False, "error": "Telegram orqali kiring"}), 403
+    user_id = data.get('user_id')
+    if not user_id: return jsonify({"success": False}), 400
 
     if data.get('id'):
-        success = update_expense_in_db(data['id'], auth['user_id'], float(data['summa']), data.get('kategoriya'))
+        success = update_expense_in_db(data['id'], int(user_id), float(data['summa']), data.get('kategoriya'))
         return jsonify({"success": success})
     return jsonify({"success": False}), 400
 
 @app.route('/api/delete', methods=['POST'])
 def api_delete():
     data = request.json
-    auth = validate_telegram_data(data.get('initData', ''), BOT_TOKEN)
-    
-    if not auth:
-        return jsonify({"success": False, "error": "Telegram orqali kiring"}), 403
+    user_id = data.get('user_id')
+    if not user_id: return jsonify({"success": False}), 400
 
     eid = request.args.get('id')
     if eid:
-        success = delete_expense_from_db(int(eid), auth['user_id'])
+        success = delete_expense_from_db(int(eid), int(user_id))
         return jsonify({"success": success})
     return jsonify({"success": False}), 400
 
 @app.route('/api/stats', methods=['GET'])
 def api_stats():
-    raw_init_data = request.args.get('initData', '')
-    auth = validate_telegram_data(raw_init_data, BOT_TOKEN)
-    
-    if not auth:
-        return jsonify({"success": False, "error": "Telegram orqali kiring"}), 403
+    user_id = request.args.get('user_id')
+    if not user_id: return jsonify({"success": False}), 400
 
     p = request.args.get('period', 'oy')
-    res, total = get_statistics_from_db(auth['user_id'], p)
+    res, total = get_statistics_from_db(int(user_id), p)
     cats = [[r[0], r[1], r[2], r[3]] for r in res]
     return jsonify({"total": total, "categories": cats})
 
 # ---------------------------------------------------------
-# 5. TELEGRAM BOT LOGIKASI (TIKLANDI)
+# 5. TELEGRAM BOT LOGIKASI
 # ---------------------------------------------------------
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     user = update.message.from_user
