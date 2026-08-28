@@ -405,21 +405,14 @@ def api_stats():
 # ---------------------------------------------------------
 # 5. TELEGRAM BOT LOGIKASI
 # ---------------------------------------------------------
+from telegram import WebAppInfo, KeyboardButton, ReplyKeyboardMarkup # Import qismida borligini tekshiring
+
+# Keyboardni shunga almashtiring:
 keyboard = ReplyKeyboardMarkup([
-    [" Statistika", "📜 Ro'yxat"],
-    [" Yordam"]
+    [KeyboardButton("🚀 Ilovani ochish", web_app=WebAppInfo(url=WEB_URL))],
+    ["📊 Statistika", "📜 Ro'yxat"]
 ], resize_keyboard=True)
 
-async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    msg = (
-        " *Assalomu alaykum!*\\n\\n"
-        "Futuristik Xarajat Bot ishga tushdi.\\n\\n"
-        "📱 *Ilovani ochish:*\\n"
-        f"`{WEB_URL}`\\n\\n"
-        " *Yoki shu yerda yozing:*\\n"
-        "`50000 ovqat`"
-    )
-    await update.message.reply_text(msg, parse_mode='Markdown', reply_markup=keyboard)
 
 async def handle_expense(update: Update, context: ContextTypes.DEFAULT_TYPE):
     text = update.message.text.strip()
