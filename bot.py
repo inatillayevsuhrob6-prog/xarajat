@@ -466,7 +466,7 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
     msg = (
         f" *Salom, {name}!*\n\n"
-        "🚀 Futuristik Xarajat Botga xush kelibsiz!\n\n"
+        " Futuristik Xarajat Botga xush kelibsiz!\n\n"
         "📱 Quyidagi tugma orqali ilovani oching:"
     )
 
