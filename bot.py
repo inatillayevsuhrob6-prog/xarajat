@@ -5,7 +5,8 @@ import hashlib
 from datetime import datetime, timedelta
 from threading import Thread
 from urllib.parse import parse_qsl
-from flask import Flask, request, jsonify, headers
+# TUZATISH: 'headers' olib tashlandi
+from flask import Flask, request, jsonify 
 from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup, ReplyKeyboardMarkup, WebAppInfo
 from telegram.ext import Application, CommandHandler, MessageHandler, filters, ContextTypes
 
@@ -144,7 +145,7 @@ def get_recent_expenses(user_id, limit=20):
     return rows
 
 # ---------------------------------------------------------
-# 3. FUTURISTIK DIZAYN (O'zgarmagan)
+# 3. FUTURISTIK DIZAYN
 # ---------------------------------------------------------
 HTML_CONTENT = """
 <!DOCTYPE html>
@@ -286,7 +287,7 @@ HTML_CONTENT = """
                 showToast(eid ? "️ Yangilandi!" : "✅ Saqlandi!");
                 resetForm();
                 loadView(currentView);
-            } catch(e) { showToast("❌ Xatolik!"); }
+            } catch(e) { showToast(" Xatolik!"); }
         }
 
         function resetForm() {
@@ -335,7 +336,7 @@ HTML_CONTENT = """
                     headers: {'Content-Type': 'application/json'},
                     body: JSON.stringify({initData: initData})
                 });
-                showToast("🗑️ O'chirildi!");
+                showToast("️ O'chirildi!");
                 loadView(currentView);
             } catch(e) { showToast("❌ Xatolik!"); }
         }
@@ -537,7 +538,7 @@ def main():
     application.add_handler(CommandHandler("royxat", show_list))
     application.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, handle_expense))
     
-    print("🤖 Bot handlerlari ro'yxatga olindi...")
+    print(" Bot handlerlari ro'yxatga olindi...")
 
     # Gunicorn uchun fon rejimidagi bot
     def run_bot_in_background():
