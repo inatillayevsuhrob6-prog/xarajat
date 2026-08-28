@@ -1,8 +1,11 @@
 import os
 import sqlite3
+import hmac
+import hashlib
 from datetime import datetime, timedelta
 from threading import Thread
-from flask import Flask, request, jsonify
+from urllib.parse import parse_qsl
+from flask import Flask, request, jsonify, headers
 from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup, ReplyKeyboardMarkup, WebAppInfo
 from telegram.ext import Application, CommandHandler, MessageHandler, filters, ContextTypes
 
@@ -16,6 +19,33 @@ DB_NAME = "xarajatlar.db"
 PORT = int(os.environ.get('PORT', 5000))
 
 app = Flask(__name__, static_folder='.', static_url_path='')
+
+# ---------------------------------------------------------
+# XAVFSIZLIK: Telegram initData ni tekshirish funksiyasi
+# ---------------------------------------------------------
+def validate_telegram_data(init_data: str, bot_token: str) -> dict | None:
+    """Telegramdan kelgan ma'lumotni haqiqiyligini tekshiradi"""
+    try:
+        parsed_data = dict(parse_qsl(init_data))
+        received_hash = parsed_data.pop('hash')
+        
+        # Ma'lumotlarni tartiblab, imzo yaratamiz
+        data_check_string = '\n'.join(f"{k}={v}" for k, v in sorted(parsed_data.items()))
+        
+        # Maxfiy kalit yaratish (Web App uchun)
+        secret_key = hmac.new(b"WebAppData", bot_token.encode(), hashlib.sha256).digest()
+        
+        # Hisoblangan hash
+        calculated_hash = hmac.new(secret_key, data_check_string.encode(), hashlib.sha256).hexdigest()
+        
+        # Agar hash lar mos kelsa, user_id ni qaytaramiz
+        if hmac.compare_digest(calculated_hash, received_hash):
+            return {'user_id': int(parsed_data['user']['id'])}
+            
+    except Exception as e:
+        print(f"Validation Error: {e}")
+    
+    return None
 
 # ---------------------------------------------------------
 # 2. MA'LUMOTLAR BAZASI
@@ -90,7 +120,6 @@ def get_statistics_from_db(user_id, period="oy"):
     now = datetime.now()
     start_date = (now - timedelta(days=7)).strftime("%Y-%m-%d") if period == "hafta" else now.replace(day=1).strftime("%Y-%m-%d")
     
-    # MUHIM: MIN(id) orqali har bir kategoriya uchun bitta ID olamiz
     cursor.execute(
         "SELECT MIN(id), kategoriya, SUM(summa), COUNT(*) FROM xarajatlar WHERE user_id=? AND sana>=? GROUP BY kategoriya ORDER BY SUM(summa) DESC",
         (user_id, start_date)
@@ -115,7 +144,7 @@ def get_recent_expenses(user_id, limit=20):
     return rows
 
 # ---------------------------------------------------------
-# 3. FUTURISTIK DIZAYN (Ikonkalar bilan)
+# 3. FUTURISTIK DIZAYN (O'zgarmagan)
 # ---------------------------------------------------------
 HTML_CONTENT = """
 <!DOCTYPE html>
@@ -155,13 +184,11 @@ HTML_CONTENT = """
         .s-btn { flex: 1; background: transparent; border: 1px solid var(--glass); color: white; padding: 8px; border-radius: 6px; cursor: pointer; }
         .s-btn.active { background: var(--primary); color: black; border-color: var(--primary); }
         
-        /* Ro'yxat elementlari */
         .list-item { display: flex; justify-content: space-between; align-items: center; padding: 12px 0; border-bottom: 1px solid var(--glass); }
         .item-info { flex: 1; }
         .item-cat { font-size: 12px; opacity: 0.7; }
         .item-sum { font-weight: bold; color: var(--primary); }
         
-        /* Ikonkali tugmalar stili */
         .item-actions { display: flex; gap: 8px; margin-left: 10px; }
         .act-btn { 
             background: rgba(255, 255, 255, 0.05); 
@@ -175,11 +202,9 @@ HTML_CONTENT = """
         }
         .act-btn svg { width: 18px; height: 18px; fill: currentColor; }
 
-        /* Tahrirlash (Moviy Neon) */
         .act-btn.edit { color: #00f3ff; border-color: rgba(0, 243, 255, 0.3); }
         .act-btn.edit:hover { background: rgba(0, 243, 255, 0.15); color: #fff; box-shadow: 0 0 15px rgba(0, 243, 255, 0.6); transform: translateY(-2px); }
 
-        /* O'chirish (Qizil Neon) */
         .act-btn.del { color: #ff2a6d; border-color: rgba(255, 42, 109, 0.3); }
         .act-btn.del:hover { background: rgba(255, 42, 109, 0.15); color: #fff; box-shadow: 0 0 15px rgba(255, 42, 109, 0.6); transform: translateY(-2px); }
         
@@ -200,8 +225,8 @@ HTML_CONTENT = """
             <div style="font-size:12px; margin-bottom:5px; opacity:0.7;">Kategoriyani tanlang yoki yozing:</div>
             <div class="cats" id="cat-box">
                 <div class="cat-btn" onclick="sel(this,'Ovqat')">️ Ovqat</div>
-                <div class="cat-btn" onclick="sel(this,'Transport')">🚗 Transport</div>
-                <div class="cat-btn" onclick="sel(this,'Uy')">🏠 Uy</div>
+                <div class="cat-btn" onclick="sel(this,'Transport')"> Transport</div>
+                <div class="cat-btn" onclick="sel(this,'Uy')"> Uy</div>
                 <div class="cat-btn" onclick="sel(this,'Ko\'ngilochar')"> Ko\'ngilochar</div>
                 <div class="cat-btn" onclick="sel(this,'Xarid')">🛒 Xarid</div>
                 <div class="cat-btn" onclick="sel(this,'Boshqa')"> Boshqa</div>
@@ -228,7 +253,8 @@ HTML_CONTENT = """
         const tg = window.Telegram.WebApp; tg.expand();
         let cat = null;
         let currentView = 'oy';
-        const uid = tg.initDataUnsafe?.user?.id || 123;
+        // INIT DATA NI SERVERGA YUBORISH UCHUN SAQLAB OLAMIZ
+        const initData = tg.initData; 
 
         function sel(el, c) {
             document.querySelectorAll('.cat-btn').forEach(b=>b.classList.remove('active'));
@@ -252,8 +278,8 @@ HTML_CONTENT = """
             
             const url = eid ? '/api/update' : '/api/save';
             const body = eid 
-                ? {id: eid, user_id:uid, summa:s, kategoriya:cat}
-                : {user_id:uid, summa:s, kategoriya:cat};
+                ? {id: eid, summa:s, kategoriya:cat, initData: initData}
+                : {summa:s, kategoriya:cat, initData: initData};
 
             try {
                 await fetch(url, {method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify(body)});
@@ -303,7 +329,12 @@ HTML_CONTENT = """
         async function deleteItem(id) {
             if(!confirm("Rostdan ham o'chirmoqchimisiz?")) return;
             try {
-                await fetch(`/api/delete?id=${id}&user_id=${uid}`, {method:'POST'});
+                // DELETE DA HAM INIT DATA YUBORILADI
+                await fetch(`/api/delete?id=${id}`, {
+                    method:'POST',
+                    headers: {'Content-Type': 'application/json'},
+                    body: JSON.stringify({initData: initData})
+                });
                 showToast("🗑️ O'chirildi!");
                 loadView(currentView);
             } catch(e) { showToast("❌ Xatolik!"); }
@@ -318,7 +349,8 @@ HTML_CONTENT = """
             resDiv.innerHTML = "<div style='opacity:0.5'>Yuklanmoqda...</div>";
 
             try {
-                const r = await fetch(`/api/stats?user_id=${uid}&period=${view}`);
+                // STATISTIKA UCHUN HAM INIT DATA KERAK
+                const r = await fetch(`/api/stats?period=${view}&initData=${encodeURIComponent(initData)}`);
                 const d = await r.json();
                 
                 let html = `<span class="total-line">Jami: ${d.total.toLocaleString()} so'm</span>`;
@@ -330,7 +362,6 @@ HTML_CONTENT = """
                         const cnt = c[3] || 0;
                         const id = c[0] || 0;
 
-                        // YANGI IKONKALI HTML
                         html += `<div class="list-item">
                             <div class="item-info">
                                 <div class="item-sum">${sum.toLocaleString()} so'm</div>
@@ -363,7 +394,7 @@ HTML_CONTENT = """
 """
 
 # ---------------------------------------------------------
-# 4. FLASK ROUTES
+# 4. FLASK ROUTES (XAVFSIZLIK BILAN)
 # ---------------------------------------------------------
 @app.route('/')
 def home():
@@ -372,33 +403,55 @@ def home():
 @app.route('/api/save', methods=['POST'])
 def api_save():
     data = request.json
-    if data.get('user_id') and data.get('summa'):
-        save_expense_to_db(data['user_id'], float(data['summa']), data.get('kategoriya','Boshqa'))
+    # USER_ID NI FRONTEND DAN EMAS, TELEGRAM IMZOSIDAN OLAMIZ
+    auth = validate_telegram_data(data.get('initData', ''), BOT_TOKEN)
+    
+    if not auth:
+        return jsonify({"success": False, "error": "Invalid Telegram Data"}), 403
+        
+    if data.get('summa'):
+        save_expense_to_db(auth['user_id'], float(data['summa']), data.get('kategoriya','Boshqa'))
         return jsonify({"success": True})
     return jsonify({"success": False}), 400
 
 @app.route('/api/update', methods=['POST'])
 def api_update():
     data = request.json
-    if data.get('id') and data.get('user_id'):
-        success = update_expense_in_db(data['id'], data['user_id'], float(data['summa']), data.get('kategoriya'))
+    auth = validate_telegram_data(data.get('initData', ''), BOT_TOKEN)
+    
+    if not auth:
+        return jsonify({"success": False, "error": "Invalid Telegram Data"}), 403
+
+    if data.get('id'):
+        success = update_expense_in_db(data['id'], auth['user_id'], float(data['summa']), data.get('kategoriya'))
         return jsonify({"success": success})
     return jsonify({"success": False}), 400
 
 @app.route('/api/delete', methods=['POST'])
 def api_delete():
+    data = request.json
+    auth = validate_telegram_data(data.get('initData', ''), BOT_TOKEN)
+    
+    if not auth:
+        return jsonify({"success": False, "error": "Invalid Telegram Data"}), 403
+
     eid = request.args.get('id')
-    uid = request.args.get('user_id')
-    if eid and uid:
-        success = delete_expense_from_db(int(eid), int(uid))
+    if eid:
+        success = delete_expense_from_db(int(eid), auth['user_id'])
         return jsonify({"success": success})
     return jsonify({"success": False}), 400
 
 @app.route('/api/stats', methods=['GET'])
 def api_stats():
-    uid = request.args.get('user_id')
+    # GET so'rovida initData URL parametridan olinadi
+    raw_init_data = request.args.get('initData', '')
+    auth = validate_telegram_data(raw_init_data, BOT_TOKEN)
+    
+    if not auth:
+        return jsonify({"success": False, "error": "Invalid Telegram Data"}), 403
+
     p = request.args.get('period', 'oy')
-    res, total = get_statistics_from_db(int(uid), p)
+    res, total = get_statistics_from_db(auth['user_id'], p)
     cats = [[r[0], r[1], r[2], r[3]] for r in res]
     return jsonify({"total": total, "categories": cats})
 
@@ -438,7 +491,7 @@ async def show_stats(update: Update, context: ContextTypes.DEFAULT_TYPE):
         for r in res: txt += f"• {r[1]}: {r[2]:,.0f}\\n"
         txt += f"\\n💰 *Jami:* {total:,.0f} so'm"
         
-    await update.message.reply_text(txt, parse_mode='Markdown', reply_markup=keyboard)
+    await update.message.reply_text(txt, parse_mode='Markdown')
 
 async def show_list(update: Update, context: ContextTypes.DEFAULT_TYPE):
     uid = update.message.from_user.id
@@ -450,7 +503,26 @@ async def show_list(update: Update, context: ContextTypes.DEFAULT_TYPE):
         for i, r in enumerate(rows, 1):
             txt += f"{i}. {r[2]}: {r[1]:,.0f} so'm ({r[3]} {r[4]})\\n"
             
-    await update.message.reply_text(txt, parse_mode='Markdown', reply_markup=keyboard)
+    await update.message.reply_text(txt, parse_mode='Markdown')
+
+async def handle_expense(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    text = update.message.text.strip()
+    if text in ["📊 Statistika", " Ro'yxat"]: return
+
+    try:
+        parts = text.split()
+        if len(parts) < 2:
+            await update.message.reply_text(" Format: `50000 Ovqat`", parse_mode='Markdown')
+            return
+        
+        summa = float(parts[0])
+        kat = ' '.join(parts[1:]) 
+        
+        save_expense_to_db(update.message.from_user.id, summa, kat)
+        await update.message.reply_text(f"✅ {summa:,.0f} so'm ({kat}) saqlandi!")
+        
+    except ValueError:
+        await update.message.reply_text(" Raqam yozing.")
 
 # ---------------------------------------------------------
 # 6. ASOSIY QISM
@@ -458,14 +530,6 @@ async def show_list(update: Update, context: ContextTypes.DEFAULT_TYPE):
 def main():
     init_db()
     
-    def run_flask():
-        app.run(host='0.0.0.0', port=PORT, use_reloader=False)
-    
-    t = Thread(target=run_flask)
-    t.daemon = True
-    t.start()
-    print(f" Web server: http://localhost:{PORT}")
-
     application = Application.builder().token(BOT_TOKEN).build()
     
     application.add_handler(CommandHandler("start", start))
@@ -473,8 +537,20 @@ def main():
     application.add_handler(CommandHandler("royxat", show_list))
     application.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, handle_expense))
     
-    print(" Bot ishga tushdi...")
-    application.run_polling()
+    print("🤖 Bot handlerlari ro'yxatga olindi...")
+
+    # Gunicorn uchun fon rejimidagi bot
+    def run_bot_in_background():
+        try:
+            print("🚀 Background bot polling started...")
+            application.run_polling(drop_pending_updates=True)
+        except Exception as e:
+            print(f"❌ Bot error: {e}")
+
+    bot_thread = Thread(target=run_bot_in_background)
+    bot_thread.daemon = True
+    bot_thread.start()
+    print("✅ Gunicorn mode: Bot fon rejimida ishga tushdi")
 
 if __name__ == "__main__":
     main()
