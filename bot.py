@@ -411,15 +411,21 @@ keyboard = ReplyKeyboardMarkup([
 ], resize_keyboard=True)
 
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    user = update.message.from_user
+    name = user.first_name or "Do'stim"
+
     msg = (
-        " *Assalomu alaykum!*\\n\\n"
-        "Futuristik Xarajat Bot ishga tushdi.\\n\\n"
-        "📱 *Ilovani ochish:*\\n"
-        f"`{WEB_URL}`\\n\\n"
-        " *Yoki shu yerda yozing:*\\n"
-        "`50000 ovqat`"
+        f"👋 *Salom, {name}!*\n\n"
+        "🚀 Futuristik Xarajat Botga xush kelibsiz!\n\n"
+        "📱 *Ilovani ochish:*\n"
+        f"`{WEB_URL}`\n\n"
     )
-    await update.message.reply_text(msg, parse_mode='Markdown', reply_markup=keyboard)
+
+    await update.message.reply_text(
+        msg,
+        parse_mode='Markdown',
+        reply_markup=keyboard
+    )
 
 async def handle_expense(update: Update, context: ContextTypes.DEFAULT_TYPE):
     text = update.message.text.strip()
