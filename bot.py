@@ -428,25 +428,6 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
         reply_markup=keyboard_inline
     )
 
-async def handle_expense(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    text = update.message.text.strip()
-    if text in [" Statistika", "📜 Ro'yxat", " Yordam"]: return
-
-    try:
-        parts = text.split()
-        if len(parts) < 2:
-            await update.message.reply_text(" Format: `50000 Ovqat`", parse_mode='Markdown', reply_markup=keyboard)
-            return
-        
-        summa = float(parts[0])
-        kat = ' '.join(parts[1:]) 
-        
-        save_expense_to_db(update.message.from_user.id, summa, kat)
-        await update.message.reply_text(f"✅ {summa:,.0f} so'm ({kat}) saqlandi!", reply_markup=keyboard)
-        
-    except ValueError:
-        await update.message.reply_text(" Raqam yozing.", reply_markup=keyboard)
-
 async def show_stats(update: Update, context: ContextTypes.DEFAULT_TYPE):
     uid = update.message.from_user.id
     res, total = get_statistics_from_db(uid, "oy")
