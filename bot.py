@@ -10,7 +10,7 @@ from telegram.ext import Application, CommandHandler, MessageHandler, filters, C
 # 1. SOZLAMALAR
 # ---------------------------------------------------------
 BOT_TOKEN = "8363949191:AAHMbK-Ep5XMJtQw2nTKdwfHftkAlKHyFnU" 
-WEB_URL = "http://localhost:5000" 
+WEB_URL = "https://xarajat-hty8.onrender.com/" 
 
 DB_NAME = "xarajatlar.db"
 PORT = int(os.environ.get('PORT', 5000))
@@ -23,7 +23,6 @@ app = Flask(__name__, static_folder='.', static_url_path='')
 def init_db():
     conn = sqlite3.connect(DB_NAME)
     cursor = conn.cursor()
-    # Har safar toza jadval yaratamiz (test uchun)
     cursor.execute("DROP TABLE IF EXISTS xarajatlar")
     cursor.execute("""
         CREATE TABLE IF NOT EXISTS xarajatlar (
@@ -116,7 +115,7 @@ def get_recent_expenses(user_id, limit=20):
     return rows
 
 # ---------------------------------------------------------
-# 3. FUTURISTIK DIZAYN
+# 3. FUTURISTIK DIZAYN (Ikonkalar bilan)
 # ---------------------------------------------------------
 HTML_CONTENT = """
 <!DOCTYPE html>
@@ -124,7 +123,7 @@ HTML_CONTENT = """
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Cyber Xarajat</title>
+    <title>Xarajat</title>
     <script src="https://telegram.org/js/telegram-web-app.js"></script>
     <style>
         :root {
@@ -156,14 +155,33 @@ HTML_CONTENT = """
         .s-btn { flex: 1; background: transparent; border: 1px solid var(--glass); color: white; padding: 8px; border-radius: 6px; cursor: pointer; }
         .s-btn.active { background: var(--primary); color: black; border-color: var(--primary); }
         
+        /* Ro'yxat elementlari */
         .list-item { display: flex; justify-content: space-between; align-items: center; padding: 12px 0; border-bottom: 1px solid var(--glass); }
         .item-info { flex: 1; }
         .item-cat { font-size: 12px; opacity: 0.7; }
         .item-sum { font-weight: bold; color: var(--primary); }
+        
+        /* Ikonkali tugmalar stili */
         .item-actions { display: flex; gap: 8px; margin-left: 10px; }
-        .act-btn { background: var(--glass); border: none; color: white; width: 32px; height: 32px; border-radius: 8px; cursor: pointer; display: flex; align-items: center; justify-content: center; font-size: 14px; transition: 0.2s; }
-        .act-btn.edit:hover { background: var(--primary); color: black; }
-        .act-btn.del:hover { background: var(--danger); }
+        .act-btn { 
+            background: rgba(255, 255, 255, 0.05); 
+            border: 1px solid rgba(255, 255, 255, 0.1); 
+            width: 36px; height: 36px; 
+            border-radius: 10px; 
+            cursor: pointer; 
+            display: flex; align-items: center; justify-content: center; 
+            transition: all 0.3s ease;
+            backdrop-filter: blur(5px);
+        }
+        .act-btn svg { width: 18px; height: 18px; fill: currentColor; }
+
+        /* Tahrirlash (Moviy Neon) */
+        .act-btn.edit { color: #00f3ff; border-color: rgba(0, 243, 255, 0.3); }
+        .act-btn.edit:hover { background: rgba(0, 243, 255, 0.15); color: #fff; box-shadow: 0 0 15px rgba(0, 243, 255, 0.6); transform: translateY(-2px); }
+
+        /* O'chirish (Qizil Neon) */
+        .act-btn.del { color: #ff2a6d; border-color: rgba(255, 42, 109, 0.3); }
+        .act-btn.del:hover { background: rgba(255, 42, 109, 0.15); color: #fff; box-shadow: 0 0 15px rgba(255, 42, 109, 0.6); transform: translateY(-2px); }
         
         .total-line { font-size: 18px; color: white; font-weight: bold; margin-bottom: 10px; display: block;}
         .toast { position: fixed; bottom: 20px; left: 50%; transform: translateX(-50%); background: var(--primary); color: black; padding: 12px 24px; border-radius: 30px; font-weight: bold; opacity: 0; transition: 0.3s; pointer-events: none; z-index: 1000; }
@@ -172,7 +190,7 @@ HTML_CONTENT = """
 </head>
 <body>
     <div class="container">
-        <h1> Cyber Xarajat</h1>
+        <h1>Xarajat Hisoblagich</h1>
         
         <div class="card">
             <h3 id="form-title">Yangi xarajat</h3>
@@ -239,7 +257,7 @@ HTML_CONTENT = """
 
             try {
                 await fetch(url, {method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify(body)});
-                showToast(eid ? "✏️ Yangilandi!" : "✅ Saqlandi!");
+                showToast(eid ? "️ Yangilandi!" : "✅ Saqlandi!");
                 resetForm();
                 loadView(currentView);
             } catch(e) { showToast("❌ Xatolik!"); }
@@ -305,7 +323,6 @@ HTML_CONTENT = """
                 
                 let html = `<span class="total-line">Jami: ${d.total.toLocaleString()} so'm</span>`;
                 
-                // XATOLIK OLDINI OLISH: Massiv mavjudligini tekshirish
                 if(d.categories && d.categories.length > 0) {
                     d.categories.forEach(c => {
                         const sum = c[2] || 0;
@@ -313,14 +330,19 @@ HTML_CONTENT = """
                         const cnt = c[3] || 0;
                         const id = c[0] || 0;
 
+                        // YANGI IKONKALI HTML
                         html += `<div class="list-item">
                             <div class="item-info">
                                 <div class="item-sum">${sum.toLocaleString()} so'm</div>
                                 <div class="item-cat">${name} (${cnt} ta)</div>
                             </div>
                             <div class="item-actions">
-                                <button class="act-btn edit" onclick="editItem(${id}, ${sum}, '${name}')">️</button>
-                                <button class="act-btn del" onclick="deleteItem(${id})">️</button>
+                                <button class="act-btn edit" onclick="editItem(${id}, ${sum}, '${name}')" title="Tahrirlash">
+                                    <svg viewBox="0 0 24 24"><path d="M3 17.25V21h3.75L17.81 9.94l-3.75-3.75L3 17.25zM20.71 7.04c.39-.39.39-1.02 0-1.41l-2.34-2.34c-.39-.39-1.02-.39-1.41 0l-1.83 1.83 3.75 3.75 1.83-1.83z"/></svg>
+                                </button>
+                                <button class="act-btn del" onclick="deleteItem(${id})" title="O'chirish">
+                                    <svg viewBox="0 0 24 24"><path d="M6 19c0 1.1.9 2 2 2h8c1.1 0 2-.9 2-2V7H6v12zM19 4h-3.5l-1-1h-5l-1 1H5v2h14V4z"/></svg>
+                                </button>
                             </div>
                         </div>`;
                     });
@@ -377,26 +399,24 @@ def api_stats():
     uid = request.args.get('user_id')
     p = request.args.get('period', 'oy')
     res, total = get_statistics_from_db(int(uid), p)
-    # To'g'ri formatda yuborish: [[id, kat, sum, count], ...]
     cats = [[r[0], r[1], r[2], r[3]] for r in res]
     return jsonify({"total": total, "categories": cats})
 
 # ---------------------------------------------------------
 # 5. TELEGRAM BOT LOGIKASI
 # ---------------------------------------------------------
-# Web App tugmasisiz, faqat matnli klaviatura
 keyboard = ReplyKeyboardMarkup([
     [" Statistika", "📜 Ro'yxat"],
-    ["💡 Yordam"]
+    [" Yordam"]
 ], resize_keyboard=True)
 
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     msg = (
-        "👋 *Assalomu alaykum!*\\n\\n"
+        " *Assalomu alaykum!*\\n\\n"
         "Futuristik Xarajat Bot ishga tushdi.\\n\\n"
         "📱 *Ilovani ochish:*\\n"
         f"`{WEB_URL}`\\n\\n"
-        "📝 *Yoki shu yerda yozing:*\\n"
+        " *Yoki shu yerda yozing:*\\n"
         "`50000 ovqat`"
     )
     await update.message.reply_text(msg, parse_mode='Markdown', reply_markup=keyboard)
@@ -408,7 +428,7 @@ async def handle_expense(update: Update, context: ContextTypes.DEFAULT_TYPE):
     try:
         parts = text.split()
         if len(parts) < 2:
-            await update.message.reply_text("❌ Format: `50000 Ovqat`", parse_mode='Markdown', reply_markup=keyboard)
+            await update.message.reply_text(" Format: `50000 Ovqat`", parse_mode='Markdown', reply_markup=keyboard)
             return
         
         summa = float(parts[0])
@@ -465,7 +485,7 @@ def main():
     application.add_handler(CommandHandler("royxat", show_list))
     application.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, handle_expense))
     
-    print("🤖 Bot ishga tushdi...")
+    print(" Bot ishga tushdi...")
     application.run_polling()
 
 if __name__ == "__main__":
