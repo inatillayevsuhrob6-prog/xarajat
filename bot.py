@@ -529,9 +529,13 @@ async def handle_expense(update: Update, context: ContextTypes.DEFAULT_TYPE):
 # ---------------------------------------------------------
 # 6. ASOSIY QISM (TUZATILGAN)
 # ---------------------------------------------------------
+# ---------------------------------------------------------
+# 6. ASOSIY QISM (TO'LIQ TUZATILGAN)
+# ---------------------------------------------------------
 def main():
     init_db()
     
+    # Botni yaratish
     application = Application.builder().token(BOT_TOKEN).build()
     
     application.add_handler(CommandHandler("start", start))
@@ -539,10 +543,26 @@ def main():
     application.add_handler(CommandHandler("royxat", show_list))
     application.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, handle_expense))
     
-    print("🤖 Bot handlerlari ro'yxatga olindi...")
+    print(" Bot handlerlari ro'yxatga olindi...")
 
-    # Botni alohida jarayonda ishga tushirish (Gunicorn uchun)
-    # set_wakeup_fd xatosini oldini olish uchun asyncio loop ni to'g'ri ishlatamiz
+    # Flask serverni alohida thread da ishga tushiramiz
+    def run_flask_server():
+        app.run(host='0.0.0.0', port=PORT, use_reloader=False)
+    
+    flask_thread = Thread(target=run_flask_server)
+    flask_thread.daemon = True
+    flask_thread.start()
+    print(f"🌐 Web server fon rejimida ishga tushdi: http://localhost:{PORT}")
+
+    # Asosiy jarayonda BOTNI ishga tushiramiz (set_wakeup_fd xatosini oldini olish uchun)
+    try:
+        print("🚀 Telegram bot polling rejimida ishga tushmoqda...")
+        application.run_polling(drop_pending_updates=True)
+    except Exception as e:
+        print(f"❌ Bot xatosi: {e}")
+
+if __name__ == "__main__":
+    main()
     import asyncio
     
     def run_bot_thread():
